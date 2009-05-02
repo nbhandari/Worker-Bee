@@ -21,27 +21,27 @@ class TestWorkerBee < Test::Unit::TestCase
     
     WorkerBee.recipe do
       work :base do
-        @@time_base = Time::now
         sleep 0.1
-        "base"
+        @@time_base = Time::now
+        puts " base!"
       end
       
       work :dependency_1_1, :base do
-        @@time_dependency_1_1= Time::now
         sleep 0.1
-        "dependency_1_1"
+        @@time_dependency_1_1= Time::now
+        puts " dependency_1_1!"
       end
       
       work :dependency_1_2, :base do
-        "dependency_1_2"
         sleep 0.1
         @@time_dependency_1_2= Time::now
+        puts " dependency_1_2!"
       end
       
       work :complex,  :dependency_1_1, :dependency_1_2 do
-        "complex"
         sleep 0.1
         @@time_complex= Time::now
+        puts " complex!"
       end
     end    
   end
@@ -84,9 +84,8 @@ class TestWorkerBee < Test::Unit::TestCase
   
   def test_run_base_task
     return_val = WorkerBee.run :base
-    assert_equal("base", return_val)
     
-    expected_output_text = "#{WorkerBee.white_space * @level}running base"
+    expected_output_text = "#{WorkerBee.white_space * @level}running base base!"
     assert_equal expected_output_text, WorkerBee.output_text
   end
 
@@ -97,6 +96,7 @@ class TestWorkerBee < Test::Unit::TestCase
     expected_output_text = "#{WorkerBee.white_space * @level}running dependency_1_1"
     @level += 1
     expected_output_text += "#{WorkerBee.white_space * @level}running base"
+    expected_output_text += " base! dependency_1_1!"
     
     assert_equal expected_output_text, WorkerBee.output_text
   end
@@ -110,17 +110,22 @@ class TestWorkerBee < Test::Unit::TestCase
     assert @@time_complex > @@time_dependency_1_1
     assert @@time_complex > @@time_dependency_1_2
     
-    expected_output_text = "#{WorkerBee.white_space * @level}running complex"
-    @level += 1
-    expected_output_text += "#{WorkerBee.white_space * @level}running dependency_1_1"
-    @level += 1
-    expected_output_text += "#{WorkerBee.white_space * @level}running base"
-    @level -=1
-    expected_output_text += "#{WorkerBee.white_space * @level}running dependency_1_2"
-    @level += 1
-    expected_output_text += "#{WorkerBee.white_space * @level}not running base - already met dependency"
-
-    assert_equal expected_output_text, WorkerBee.output_text
+    output_text_complex = "running complex"
+    output_text_dependency_1_1 = "running dependency_1_1"
+    output_text_base = "running base"
+    output_text_dependency_1_2 = "running dependency_1_2"
+    output_text_not_running_base = "not running base - already met dependency"
+    
+    assert_match /#{output_text_complex}(.)*#{output_text_dependency_1_1}/, WorkerBee.output_text
+    assert_match /#{output_text_complex}(.)*#{output_text_dependency_1_2}/, WorkerBee.output_text
+    assert_match /(#{output_text_dependency_1_1} | #{output_text_dependency_1_2})(.)*#{output_text_base}/, WorkerBee.output_text
+    assert_match /#{output_text_base}(.)*#{output_text_not_running_base}/, WorkerBee.output_text
+    
+    assert_match /#{output_text_base}(.)*base!/, WorkerBee.output_text
+    assert_no_match /!(.)*base!/, WorkerBee.output_text
+    assert_match /base!(.)*#{output_text_not_running_base}/, WorkerBee.output_text
+    assert_match /base!(.)*dependency_1_1!(.)*complex!/, WorkerBee.output_text
+    assert_match /base!(.)*dependency_1_2!(.)*complex!/, WorkerBee.output_text
   end
   
 end

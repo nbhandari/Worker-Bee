@@ -1,15 +1,16 @@
+require 'thread'
+
 class WorkerBee
   VERSION = '1.0.0'
   
-  class << self; attr_accessor :workitems_list end
+  class << self; attr_accessor :workitems_list end  
   
   @@white_space = '  '
   
   def self.white_space
     @@white_space
   end
-  
-  
+    
   class WorkItem
     attr_accessor :symbol, :dependencies, :block
     def initialize symbol, *args, &block      
@@ -38,23 +39,35 @@ class WorkerBee
   end
   
   def self.run(symbol)
-    finished_dependencies = Hash.new(false)
+    finished_dependencies = Hash.new
+    @mutex = Mutex.new
     recursive_run @workitems_list[symbol], finished_dependencies, 0
   end
   
   private
   def self.recursive_run workitem, finished_deps, level
+    threads = []
     puts "#{@@white_space * level}running #{workitem.symbol}"
-    level += 1
     workitem.dependencies.each do |dep|
-      if !finished_deps.has_key?(dep)
-        recursive_run @workitems_list[dep], finished_deps, level
-        finished_deps[dep] = true
-      else
-        puts "#{@@white_space * level}not running #{@workitems_list[dep].symbol} - already met dependency"
+      threads << Thread.new do
+        key_present = false
+        @mutex.synchronize {
+          key_present = finished_deps.has_key?(dep)
+          if !key_present then
+            finished_deps[dep] = Thread.current
+          end
+        }
+        
+        if !key_present then
+          recursive_run @workitems_list[dep], finished_deps, level+1
+        else
+          finished_deps[dep].join
+          puts "#{@@white_space * (level+1)}not running #{@workitems_list[dep].symbol} - already met dependency" 
+        end
       end
     end
     
+    threads.each { |thread| thread.join }        
     workitem.block.call    
   end  
 end
